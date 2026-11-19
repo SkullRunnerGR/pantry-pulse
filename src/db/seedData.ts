@@ -28,9 +28,38 @@ function isoAtHour(baseDate: Date, dayOffset: number, hour: number): string {
 }
 
 /**
- * Generates a realistic 21-day household history so the ML depletion forecaster,
- * weekend seasonality multipliers, spoilage risk radar, and smart trip scheduler
- * immediately demonstrate high-signal predictions on first launch.
+ * Clean blank starting state for a new user:
+ * zero preloaded inventory, meals, consumption history, or shopping items.
+ */
+export function createBlankDataset(now = new Date()): SeedDataset {
+  return {
+    profile: {
+      id: 'user_primary',
+      name: '',
+      householdSize: 1,
+      dailyCalorieGoal: 2000,
+      proteinGoalG: 130,
+      carbsGoalG: 220,
+      fatGoalG: 65,
+      fiberGoalG: 30,
+      preferredShopDays: [3, 6], // Wednesday & Saturday
+      shopLookaheadDays: 6,
+      minTripIntervalDays: 5,
+      remindersEnabled: true,
+      reminderHour: 9,
+      updatedAt: now.toISOString(),
+    },
+    products: [],
+    batches: [],
+    events: [],
+    meals: [],
+    receipts: [],
+    manualShoppingItems: [],
+  };
+}
+
+/**
+ * Generates a realistic 21-day household history (used in tests and optional demo mode).
  */
 export function createSeedDataset(now = new Date()): SeedDataset {
   const profile: UserProfile = {

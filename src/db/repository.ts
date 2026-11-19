@@ -10,9 +10,9 @@ import {
   UserProfile,
 } from '../domain/types';
 import { SQLITE_SCHEMA_STATEMENTS } from './schema';
-import { createSeedDataset, SeedDataset } from './seedData';
+import { createBlankDataset, createSeedDataset, SeedDataset } from './seedData';
 
-const WEB_STORAGE_KEY = 'pantrypulse_state_v1';
+const WEB_STORAGE_KEY = 'pantrypulse_state_v2';
 const DB_NAME = 'pantrypulse.db';
 
 export interface PersistedState extends SeedDataset {
@@ -59,15 +59,15 @@ class PantryRepository {
         }
       }
     } catch {
-      // Fall through to seed
+      // Fall through to blank state
     }
-    const seeded: PersistedState = {
-      ...createSeedDataset(new Date()),
+    const blank: PersistedState = {
+      ...createBlankDataset(new Date()),
       checkedShoppingMap: {},
     };
-    await this.saveAll(seeded);
+    await this.saveAll(blank);
     this.initialized = true;
-    return seeded;
+    return blank;
   }
 
   private async loadOrSeedSqlite(): Promise<PersistedState> {
@@ -75,18 +75,20 @@ class PantryRepository {
     if (!db) return this.loadOrSeedWeb();
 
     const meta = await db.getFirstAsync<{ value: string }>(
-      `SELECT value FROM app_meta WHERE key = 'seeded_v1'`
+      `SELECT value FROM app_meta WHERE key = 'initialized_v2_blank'`
     );
 
     if (!meta) {
-      const seeded: PersistedState = {
-        ...createSeedDataset(new Date()),
+      const blank: PersistedState = {
+        ...createBlankDataset(new Date()),
         checkedShoppingMap: {},
       };
-      await this.saveAllSqlite(db, seeded);
-      await db.runAsync(`INSERT OR REPLACE INTO app_meta (key, value) VALUES ('seeded_v1', '1')`);
+      await this.saveAllSqlite(db, blank);
+      await db.runAsync(
+        `INSERT OR REPLACE INTO app_meta (key, value) VALUES ('initialized_v2_blank', '1')`
+      );
       this.initialized = true;
-      return seeded;
+      return blank;
     }
 
     const profileRow = await db.getFirstAsync<any>(`SELECT * FROM user_profiles LIMIT 1`);
@@ -126,7 +128,7 @@ class PantryRepository {
       itemsByMeal.set(r.meal_log_id, arr);
     }
 
-    const fallback = createSeedDataset(new Date());
+    const fallback = createBlankDataset(new Date());
 
     const profile: UserProfile = profileRow
       ? {
@@ -296,9 +298,17 @@ class PantryRepository {
         ]
       );
 
+      await db.runAsync(`DELETE FROM meal_items`);
+      await db.runAsync(`DELETE FROM consumption_events`);
+      await db.runAsync(`DELETE FROM inventory_batches`);
+      await db.runAsync(`DELETE FROM meal_logs`);
+      await db.runAsync(`DELETE FROM manual_shopping_items`);
+      await db.runAsync(`DELETE FROM receipts`);
+      await db.runAsync(`DELETE FROM products`);
+
       for (const prod of state.products) {
         await db.runAsync(
-          `INSERT OR REPLACE INTO products
+          `INSERT INTO products
            (id, barcode, name, brand, category, default_unit, default_package_qty, serving_size, serving_label,
             kcal_per_100, protein_per_100, carbs_per_100, fat_per_100, fiber_per_100, default_shelf_life_days,
             storage_location, avg_unit_price, aisle, is_staple, updated_at)
@@ -330,14 +340,13 @@ class PantryRepository {
 
       for (const r of state.receipts) {
         await db.runAsync(
-          `INSERT OR REPLACE INTO receipts
+          `INSERT INTO receipts
            (id, merchant_name, purchased_at, subtotal, tax, total, raw_ocr_text, parsed_item_count)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [r.id, r.merchantName, r.purchasedAt, r.subtotal, r.tax, r.total, r.rawOcrText, r.parsedItemCount]
         );
       }
 
-      await db.runAsync(`DELETE FROM inventory_batches`);
       for (const b of state.batches) {
         await db.runAsync(
           `INSERT INTO inventory_batches
@@ -360,8 +369,6 @@ class PantryRepository {
         );
       }
 
-      await db.runAsync(`DELETE FROM meal_items`);
-      await db.runAsync(`DELETE FROM meal_logs`);
       for (const m of state.meals) {
         await db.runAsync(
           `INSERT INTO meal_logs
@@ -404,7 +411,6 @@ class PantryRepository {
         }
       }
 
-      await db.runAsync(`DELETE FROM consumption_events`);
       for (const e of state.events) {
         await db.runAsync(
           `INSERT INTO consumption_events
@@ -424,7 +430,6 @@ class PantryRepository {
         );
       }
 
-      await db.runAsync(`DELETE FROM manual_shopping_items`);
       for (const item of state.manualShoppingItems) {
         await db.runAsync(
           `INSERT INTO manual_shopping_items
@@ -452,6 +457,15 @@ class PantryRepository {
         [JSON.stringify(state.checkedShoppingMap)]
       );
     });
+  }
+
+  async clearAllData(): Promise<PersistedState> {
+    const blank: PersistedState = {
+      ...createBlankDataset(new Date()),
+      checkedShoppingMap: {},
+    };
+    await this.saveAll(blank);
+    return blank;
   }
 
   async resetToDemo(): Promise<PersistedState> {

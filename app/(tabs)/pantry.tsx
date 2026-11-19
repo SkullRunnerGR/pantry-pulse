@@ -203,6 +203,38 @@ export default function PantryScreen() {
 
         {/* Inventory Cards */}
         <View style={{ gap: 12 }}>
+          {filteredProducts.length === 0 ? (
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: palette.surface,
+                  borderColor: palette.border,
+                  alignItems: 'center',
+                  paddingVertical: 28,
+                },
+              ]}>
+              <Ionicons name="cube-outline" size={32} color={palette.textMuted} />
+              <Text style={[styles.prodName, { color: palette.text, textAlign: 'center' }]}>
+                {products.length === 0 ? 'Your pantry is empty' : 'No matching items'}
+              </Text>
+              <Text style={[styles.prodMeta, { color: palette.textSecondary, textAlign: 'center' }]}>
+                {products.length === 0
+                  ? 'Scan a barcode, photograph a receipt, or add items manually to begin tracking.'
+                  : 'Try clearing your search or switching storage zone filters.'}
+              </Text>
+              {products.length === 0 && (
+                <Pressable
+                  onPress={() => router.push('/(tabs)/scan')}
+                  style={[styles.addBtn, { backgroundColor: palette.primary, marginTop: 4 }]}>
+                  <Ionicons name="scan-outline" size={16} color={palette.primaryText} />
+                  <Text style={[styles.addBtnText, { color: palette.primaryText }]}>
+                    Scan Barcode or Receipt
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          ) : null}
           {filteredProducts.map((product) => {
             const f = forecasts[product.id];
             if (!f) return null;

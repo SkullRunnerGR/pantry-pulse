@@ -260,7 +260,9 @@ export default function ShopScreen() {
         {shoppingPlan.items.length === 0 ? (
           <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
-              Your pantry is fully stocked for the next {profile.shopLookaheadDays} days! No critical or upcoming items needed yet.
+              {products.length === 0
+                ? 'Your shopping list is empty. Add items above manually, or stock groceries in your Pantry to enable automatic ML restock predictions.'
+                : `Your pantry is stocked for the next ${profile.shopLookaheadDays} days! No critical or upcoming items needed yet.`}
             </Text>
           </View>
         ) : (
@@ -276,30 +278,32 @@ export default function ShopScreen() {
         )}
 
         {/* ML Consumption Insights */}
-        <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-          <View style={[styles.rowBetween, { gap: 8 }]}>
-            <Text style={[styles.cardTitle, { color: palette.text, flex: 1 }]}>
-              Learned Household Velocity (ML)
-            </Text>
-            <Badge label="Bayesian-EWMA" tone="primary" />
-          </View>
+        {topFastMovers.length > 0 && (
+          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+            <View style={[styles.rowBetween, { gap: 8 }]}>
+              <Text style={[styles.cardTitle, { color: palette.text, flex: 1 }]}>
+                Learned Household Velocity (ML)
+              </Text>
+              <Badge label="Bayesian-EWMA" tone="primary" />
+            </View>
 
-          {topFastMovers.map(({ product, forecast }) => (
-            <Pressable
-              key={product.id}
-              onPress={() => router.push(`/product/${product.id}`)}
-              style={[styles.mlRow, { borderTopColor: palette.borderSubtle }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.itemName, { color: palette.text }]}>{product.name}</Text>
-                <Text style={[styles.itemMeta, { color: palette.textSecondary }]}>
-                  {formatQuantity(forecast.dailyRateMean, forecast.unit)}/day · Safety stock{' '}
-                  {forecast.safetyStockDays}d · {forecast.observationDays} active days
-                </Text>
-              </View>
-              <Badge label={`${forecast.confidenceScore}% conf`} tone="success" />
-            </Pressable>
-          ))}
-        </View>
+            {topFastMovers.map(({ product, forecast }) => (
+              <Pressable
+                key={product.id}
+                onPress={() => router.push(`/product/${product.id}`)}
+                style={[styles.mlRow, { borderTopColor: palette.borderSubtle }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.itemName, { color: palette.text }]}>{product.name}</Text>
+                  <Text style={[styles.itemMeta, { color: palette.textSecondary }]}>
+                    {formatQuantity(forecast.dailyRateMean, forecast.unit)}/day · Safety stock{' '}
+                    {forecast.safetyStockDays}d · {forecast.observationDays} active days
+                  </Text>
+                </View>
+                <Badge label={`${forecast.confidenceScore}% conf`} tone="success" />
+              </Pressable>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

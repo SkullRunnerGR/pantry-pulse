@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { CATEGORY_PRIORS, RECIPE_TEMPLATES } from '../domain/catalog';
+import { CATEGORY_PRIORS, DEFAULT_PRODUCTS, RECIPE_TEMPLATES } from '../domain/catalog';
 import {
   BaseUnit,
   ConsumptionEvent,
@@ -82,6 +82,7 @@ export interface PantryContextValue {
   addManualShoppingItem: (name: string, category?: FoodCategory, price?: number) => Promise<void>;
   completeShoppingTrip: () => Promise<number>;
   updateProfile: (patch: Partial<UserProfile>) => Promise<void>;
+  clearAllData: () => Promise<void>;
   resetDemoData: () => Promise<void>;
 }
 
@@ -249,6 +250,18 @@ export function PantryProvider({ children }: { children: React.ReactNode }) {
         let product = line.matchedProductId
           ? nextProducts.find((p) => p.id === line.matchedProductId)
           : undefined;
+
+        if (!product && line.matchedProductId) {
+          const catalogTemplate = DEFAULT_PRODUCTS.find((p) => p.id === line.matchedProductId);
+          if (catalogTemplate) {
+            product = {
+              ...catalogTemplate,
+              avgUnitPrice: line.price || catalogTemplate.avgUnitPrice,
+              updatedAt: nowIso,
+            };
+            nextProducts.push(product);
+          }
+        }
 
         if (!product) {
           const prior = CATEGORY_PRIORS[line.category];
@@ -421,7 +434,8 @@ export function PantryProvider({ children }: { children: React.ReactNode }) {
       if (!state) throw new Error('Store not initialized');
       const nowIso = new Date().toISOString();
       const mealId = `meal_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-      const productMap = new Map(state.products.map((p) => [p.id, p]));
+      const pantryMap = new Map(state.products.map((p) => [p.id, p]));
+      const catalogMap = new Map(DEFAULT_PRODUCTS.map((p) => [p.id, p]));
 
       let workingBatches = state.batches;
       const newEvents: ConsumptionEvent[] = [];
@@ -429,18 +443,19 @@ export function PantryProvider({ children }: { children: React.ReactNode }) {
 
       for (let i = 0; i < input.ingredients.length; i++) {
         const ing = input.ingredients[i];
-        const prod = ing.productId ? productMap.get(ing.productId) : undefined;
-        const nut = prod
-          ? calculateProductNutrition(prod, ing.quantity)
+        const pantryProd = ing.productId ? pantryMap.get(ing.productId) : undefined;
+        const nutritionProd = pantryProd ?? (ing.productId ? catalogMap.get(ing.productId) : undefined);
+        const nut = nutritionProd
+          ? calculateProductNutrition(nutritionProd, ing.quantity)
           : ing.customNutrition ?? { kcal: 150, proteinG: 8, carbsG: 18, fatG: 5, fiberG: 2 };
 
         mealItems.push({
           id: `${mealId}_it_${i}`,
           mealLogId: mealId,
-          productId: prod?.id ?? null,
-          name: prod?.name ?? ing.name,
+          productId: pantryProd?.id ?? null,
+          name: nutritionProd?.name ?? ing.name,
           quantity: ing.quantity,
-          unit: prod?.defaultUnit ?? ing.unit,
+          unit: nutritionProd?.defaultUnit ?? ing.unit,
           kcal: nut.kcal,
           proteinG: nut.proteinG,
           carbsG: nut.carbsG,
@@ -448,12 +463,12 @@ export function PantryProvider({ children }: { children: React.ReactNode }) {
           fiberG: nut.fiberG,
         });
 
-        if (prod && input.deductFromPantry !== false) {
+        if (pantryProd && input.deductFromPantry !== false) {
           const deduction = deductInventoryFifo({
             batches: workingBatches,
-            productId: prod.id,
+            productId: pantryProd.id,
             quantityToDeduct: ing.quantity,
-            unit: prod.defaultUnit,
+            unit: pantryProd.defaultUnit,
             source: 'meal_log',
             occurredAt: nowIso,
             mealLogId: mealId,
@@ -648,6 +663,11 @@ export function PantryProvider({ children }: { children: React.ReactNode }) {
     [state, persist]
   );
 
+  const clearAllData = useCallback(async () => {
+    const blank = await pantryRepository.clearAllData();
+    setState(blank);
+  }, []);
+
   const resetDemoData = useCallback(async () => {
     const fresh = await pantryRepository.resetToDemo();
     setState(fresh);
@@ -680,6 +700,7 @@ export function PantryProvider({ children }: { children: React.ReactNode }) {
     addManualShoppingItem,
     completeShoppingTrip,
     updateProfile,
+    clearAllData,
     resetDemoData,
   };
 

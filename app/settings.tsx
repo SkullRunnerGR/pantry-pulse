@@ -12,24 +12,24 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export default function SettingsModal() {
   const { palette } = useTheme();
   const router = useRouter();
-  const { profile, updateProfile, resetDemoData } = usePantry();
+  const { profile, updateProfile, clearAllData, resetDemoData } = usePantry();
 
-  const [name, setName] = useState(profile?.name ?? 'Alex');
-  const [kcalGoal, setKcalGoal] = useState(String(profile?.dailyCalorieGoal ?? 2150));
-  const [proteinGoal, setProteinGoal] = useState(String(profile?.proteinGoalG ?? 145));
-  const [carbsGoal, setCarbsGoal] = useState(String(profile?.carbsGoalG ?? 225));
-  const [fatGoal, setFatGoal] = useState(String(profile?.fatGoalG ?? 70));
+  const [name, setName] = useState(profile?.name ?? '');
+  const [kcalGoal, setKcalGoal] = useState(String(profile?.dailyCalorieGoal ?? 2000));
+  const [proteinGoal, setProteinGoal] = useState(String(profile?.proteinGoalG ?? 130));
+  const [carbsGoal, setCarbsGoal] = useState(String(profile?.carbsGoalG ?? 220));
+  const [fatGoal, setFatGoal] = useState(String(profile?.fatGoalG ?? 65));
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   if (!profile) return null;
 
   const handleSaveGoals = async () => {
     await updateProfile({
-      name: name.trim() || profile.name,
-      dailyCalorieGoal: Math.max(1000, parseInt(kcalGoal, 10) || 2150),
-      proteinGoalG: Math.max(30, parseInt(proteinGoal, 10) || 145),
-      carbsGoalG: Math.max(30, parseInt(carbsGoal, 10) || 225),
-      fatGoalG: Math.max(20, parseInt(fatGoal, 10) || 70),
+      name: name.trim(),
+      dailyCalorieGoal: Math.max(1000, parseInt(kcalGoal, 10) || 2000),
+      proteinGoalG: Math.max(30, parseInt(proteinGoal, 10) || 130),
+      carbsGoalG: Math.max(30, parseInt(carbsGoal, 10) || 220),
+      fatGoalG: Math.max(20, parseInt(fatGoal, 10) || 65),
     });
     setSavedMsg('Preferences saved!');
     setTimeout(() => setSavedMsg(null), 2000);
@@ -44,10 +44,21 @@ export default function SettingsModal() {
     await updateProfile({ preferredShopDays: next });
   };
 
-  const handleReset = async () => {
+  const handleClearAll = async () => {
+    await clearAllData();
+    setName('');
+    setKcalGoal('2000');
+    setProteinGoal('130');
+    setCarbsGoal('220');
+    setFatGoal('65');
+    setSavedMsg('All data cleared!');
+    setTimeout(() => router.back(), 600);
+  };
+
+  const handleLoadDemo = async () => {
     await resetDemoData();
-    setSavedMsg('Demo dataset restored!');
-    setTimeout(() => router.back(), 700);
+    setSavedMsg('Sample 21-day demo loaded!');
+    setTimeout(() => router.back(), 600);
   };
 
   return (
@@ -96,6 +107,8 @@ export default function SettingsModal() {
             <TextInput
               value={name}
               onChangeText={setName}
+              placeholder="Your name"
+              placeholderTextColor={palette.textMuted}
               style={[styles.input, { backgroundColor: palette.background, borderColor: palette.border, color: palette.text }]}
             />
           </View>
@@ -225,13 +238,22 @@ export default function SettingsModal() {
         </View>
       </View>
 
-      {/* Demo Data Reset */}
+      {/* Data Management */}
       <Pressable
-        onPress={handleReset}
+        onPress={handleClearAll}
         style={[styles.resetBtn, { borderColor: palette.border, backgroundColor: palette.surface }]}>
-        <Ionicons name="refresh" size={16} color={palette.danger} />
+        <Ionicons name="trash-outline" size={16} color={palette.danger} />
         <Text style={{ color: palette.danger, fontWeight: '700', fontSize: 13 }}>
-          Reset Sample 21-Day Household Dataset
+          Clear All Data (Start Blank)
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={handleLoadDemo}
+        style={[styles.resetBtn, { borderColor: palette.border, backgroundColor: palette.surface }]}>
+        <Ionicons name="flask-outline" size={16} color={palette.textSecondary} />
+        <Text style={{ color: palette.textSecondary, fontWeight: '600', fontSize: 13 }}>
+          Optional: Load Sample 21-Day Demo Data
         </Text>
       </Pressable>
     </ScrollView>

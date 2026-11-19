@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Badge } from '@/src/components/Badge';
 import { CalorieRing } from '@/src/components/CalorieRing';
+import { DEFAULT_PRODUCTS } from '@/src/domain/catalog';
 import { MealType, Product } from '@/src/domain/types';
 import {
   calculateProductNutrition,
@@ -29,6 +30,7 @@ import { useTheme } from '@/src/theme/useTheme';
 interface DraftIngredient {
   product: Product;
   quantity: number;
+  isCustom?: boolean;
 }
 
 const MEAL_TYPES: Array<{ key: MealType; label: string }> = [
@@ -57,6 +59,9 @@ export default function MealsScreen() {
   const [deductFromPantry, setDeductFromPantry] = useState(true);
   const [ingSearch, setIngSearch] = useState('');
   const [draftIngredients, setDraftIngredients] = useState<DraftIngredient[]>([]);
+  const [customName, setCustomName] = useState('');
+  const [customKcal, setCustomKcal] = useState('');
+  const [customProtein, setCustomProtein] = useState('');
 
   const draftNutrition = useMemo(() => {
     return sumNutrition(
@@ -64,12 +69,23 @@ export default function MealsScreen() {
     );
   }, [draftIngredients]);
 
+  const pantryIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
+
   const pickerProducts = useMemo(() => {
     const q = ingSearch.trim().toLowerCase();
-    return products
+    const merged = [
+      ...products,
+      ...DEFAULT_PRODUCTS.filter((p) => !pantryIds.has(p.id)),
+    ];
+    return merged
       .filter((p) => !q || p.name.toLowerCase().includes(q))
-      .sort((a, b) => (forecasts[b.id]?.currentStock ?? 0) - (forecasts[a.id]?.currentStock ?? 0));
-  }, [products, forecasts, ingSearch]);
+      .sort((a, b) => {
+        const aIn = pantryIds.has(a.id) ? 1 : 0;
+        const bIn = pantryIds.has(b.id) ? 1 : 0;
+        if (aIn !== bIn) return bIn - aIn;
+        return (forecasts[b.id]?.currentStock ?? 0) - (forecasts[a.id]?.currentStock ?? 0);
+      });
+  }, [products, pantryIds, forecasts, ingSearch]);
 
   if (!profile) return null;
 
@@ -91,6 +107,37 @@ export default function MealsScreen() {
       }
       return [...prev, { product, quantity: product.servingSize }];
     });
+  };
+
+  const addCustomFood = () => {
+    const trimmed = customName.trim();
+    const kcal = Math.max(0, parseFloat(customKcal) || 0);
+    if (!trimmed || kcal <= 0) return;
+    const protein = Math.max(0, parseFloat(customProtein) || 0);
+    const customProduct: Product = {
+      id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      name: trimmed,
+      category: 'pantry',
+      defaultUnit: 'count',
+      defaultPackageQty: 1,
+      servingSize: 1,
+      servingLabel: '1 serving',
+      kcalPer100: kcal,
+      proteinPer100: protein,
+      carbsPer100: 0,
+      fatPer100: 0,
+      fiberPer100: 0,
+      defaultShelfLifeDays: 1,
+      storageLocation: 'pantry',
+      avgUnitPrice: 0,
+      aisle: 'Custom',
+      isStaple: false,
+      updatedAt: new Date().toISOString(),
+    };
+    setDraftIngredients((prev) => [...prev, { product: customProduct, quantity: 1, isCustom: true }]);
+    setCustomName('');
+    setCustomKcal('');
+    setCustomProtein('');
   };
 
   const stepIngredient = (productId: string, delta: number) => {
@@ -119,10 +166,11 @@ export default function MealsScreen() {
       title: autoTitle,
       deductFromPantry,
       ingredients: draftIngredients.map((d) => ({
-        productId: d.product.id,
+        productId: d.isCustom ? null : d.product.id,
         name: d.product.name,
         quantity: d.quantity,
         unit: d.product.defaultUnit,
+        customNutrition: d.isCustom ? calculateProductNutrition(d.product, d.quantity) : undefined,
       })),
     });
 
@@ -133,6 +181,9 @@ export default function MealsScreen() {
     setMealTitle('');
     setDraftIngredients([]);
     setIngSearch('');
+    setCustomName('');
+    setCustomKcal('');
+    setCustomProtein('');
   };
 
   return (
@@ -393,14 +444,61 @@ export default function MealsScreen() {
               </View>
             )}
 
-            {/* Pantry Ingredient Picker */}
+            {/* Quick Custom Food Entry */}
+            <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+              <Text style={[styles.cardTitle, { color: palette.text }]}>Add Custom Food</Text>
+              <TextInput
+                value={customName}
+                onChangeText={setCustomName}
+                placeholder="Food name (e.g., Chicken Wrap)"
+                placeholderTextColor={palette.textMuted}
+                style={[
+                  styles.input,
+                  { backgroundColor: palette.background, borderColor: palette.border, color: palette.text },
+                ]}
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                  value={customKcal}
+                  onChangeText={setCustomKcal}
+                  keyboardType="numeric"
+                  placeholder="Calories (kcal)"
+                  placeholderTextColor={palette.textMuted}
+                  style={[
+                    styles.input,
+                    { backgroundColor: palette.background, borderColor: palette.border, color: palette.text, flex: 1 },
+                  ]}
+                />
+                <TextInput
+                  value={customProtein}
+                  onChangeText={setCustomProtein}
+                  keyboardType="numeric"
+                  placeholder="Protein (g)"
+                  placeholderTextColor={palette.textMuted}
+                  style={[
+                    styles.input,
+                    { backgroundColor: palette.background, borderColor: palette.border, color: palette.text, flex: 1 },
+                  ]}
+                />
+                <Pressable
+                  onPress={addCustomFood}
+                  style={[
+                    styles.addBtn,
+                    { backgroundColor: palette.primary, borderRadius: Radii.sm + 2, paddingHorizontal: 14 },
+                  ]}>
+                  <Text style={[styles.addBtnText, { color: palette.primaryText }]}>Add</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Pantry & Common Food Picker */}
             <Text style={[styles.sectionTitle, { color: palette.text }]}>
-              Tap Pantry Ingredients to Add
+              {products.length > 0 ? 'Tap Pantry or Common Foods' : 'Tap Common Foods to Add'}
             </Text>
             <TextInput
               value={ingSearch}
               onChangeText={setIngSearch}
-              placeholder="Filter pantry items..."
+              placeholder="Search foods..."
               placeholderTextColor={palette.textMuted}
               style={[
                 styles.input,
@@ -410,6 +508,7 @@ export default function MealsScreen() {
 
             <View style={{ gap: 8 }}>
               {pickerProducts.map((prod) => {
+                const inPantry = pantryIds.has(prod.id);
                 const stock = forecasts[prod.id]?.currentStock ?? 0;
                 const servingNut = calculateProductNutrition(prod, prod.servingSize);
                 return (
@@ -423,8 +522,10 @@ export default function MealsScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.draftName, { color: palette.text }]}>{prod.name}</Text>
                       <Text style={[styles.draftSub, { color: palette.textSecondary }]}>
-                        +{prod.servingLabel} ({servingNut.kcal} kcal) · In pantry:{' '}
-                        {formatQuantity(stock, prod.defaultUnit)}
+                        +{prod.servingLabel} ({servingNut.kcal} kcal) ·{' '}
+                        {inPantry
+                          ? `In pantry: ${formatQuantity(stock, prod.defaultUnit)}`
+                          : 'Common food'}
                       </Text>
                     </View>
                     <Ionicons name="add-circle" size={24} color={palette.primary} />

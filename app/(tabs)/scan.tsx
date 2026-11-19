@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Badge } from '@/src/components/Badge';
-import { CATEGORY_PRIORS } from '@/src/domain/catalog';
+import { CATEGORY_PRIORS, DEFAULT_PRODUCTS } from '@/src/domain/catalog';
 import {
   BaseUnit,
   FoodCategory,
@@ -43,6 +43,11 @@ export default function ScanScreen() {
   const { palette } = useTheme();
   const { products, addInventoryBatch, importParsedReceipt } = usePantry();
 
+  const referenceCatalog = React.useMemo(() => {
+    const existingIds = new Set(products.map((p) => p.id));
+    return [...products, ...DEFAULT_PRODUCTS.filter((p) => !existingIds.has(p.id))];
+  }, [products]);
+
   const [mode, setMode] = useState<ScanTab>('barcode');
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraActive, setCameraActive] = useState(false);
@@ -56,8 +61,8 @@ export default function ScanScreen() {
   const [scanShelfDays, setScanShelfDays] = useState('');
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
 
-  // Receipt OCR state
-  const [receiptText, setReceiptText] = useState(SAMPLE_RECEIPTS[0].rawText);
+  // Receipt OCR state (starts blank)
+  const [receiptText, setReceiptText] = useState('');
   const [parsedReceipt, setParsedReceipt] = useState<ParsedReceipt | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrEngineUsed, setOcrEngineUsed] = useState<string>(getActiveOcrEngineLabel());
@@ -117,7 +122,7 @@ export default function ScanScreen() {
   const processReceiptAsset = async (uri: string, base64?: string | null) => {
     setOcrBusy(true);
     try {
-      const ocr = await extractReceiptFromImage(uri, products, { base64 });
+      const ocr = await extractReceiptFromImage(uri, referenceCatalog, { base64 });
       setReceiptText(ocr.rawText);
       setParsedReceipt(ocr.parsed);
       setOcrEngineUsed(ocr.engineLabel);
@@ -168,7 +173,11 @@ export default function ScanScreen() {
 
   const handleParseReceiptText = (textOverride?: string) => {
     const src = textOverride ?? receiptText;
-    const parsed = parseManualReceiptText(src, products);
+    if (!src.trim()) {
+      showBanner('Take a receipt photo or paste receipt text first.');
+      return;
+    }
+    const parsed = parseManualReceiptText(src, referenceCatalog);
     setParsedReceipt(parsed);
   };
 

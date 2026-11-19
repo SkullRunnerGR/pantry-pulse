@@ -86,7 +86,7 @@ export default function PulseHomeScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.kicker, { color: palette.textMuted }]}>PANTRYPULSE</Text>
             <Text style={[styles.title, { color: palette.text }]}>
-              Good day, {profile.name}
+              {profile.name.trim() ? `Good day, ${profile.name}` : 'Welcome to PantryPulse'}
             </Text>
           </View>
           <View style={[styles.headerActions, { flexShrink: 0 }]}>
@@ -114,8 +114,27 @@ export default function PulseHomeScreen() {
           <CalorieRing consumed={todayNutrition} profile={profile} />
         </View>
 
-        {/* Optimal Next Shopping Trip Banner */}
-        {shoppingPlan && (
+        {/* Optimal Next Shopping Trip Banner or Getting Started Card */}
+        {products.length === 0 && (!shoppingPlan || shoppingPlan.items.length === 0) ? (
+          <Pressable
+            onPress={() => router.push('/(tabs)/scan')}
+            style={[styles.tripBanner, { backgroundColor: palette.primary }]}>
+            <View style={styles.tripTopRow}>
+              <View style={styles.tripLabelRow}>
+                <Ionicons name="sparkles" size={14} color="#A7F3D0" />
+                <Text style={styles.tripKicker}>GET STARTED</Text>
+              </View>
+            </View>
+            <Text style={styles.tripDate}>Add Your First Groceries</Text>
+            <Text style={styles.tripReason}>
+              Scan a barcode, photograph a store receipt with offline OCR, or quick-add items to unlock depletion forecasts & smart trip reminders.
+            </Text>
+            <View style={styles.tripFooter}>
+              <Text style={styles.tripMeta}>Open Barcode & Receipt Scanner</Text>
+              <Ionicons name="arrow-forward-circle" size={22} color="#FFFFFF" />
+            </View>
+          </Pressable>
+        ) : shoppingPlan ? (
           <Pressable
             onPress={() => router.push('/(tabs)/shop')}
             style={[styles.tripBanner, { backgroundColor: palette.primary }]}>
@@ -148,7 +167,7 @@ export default function PulseHomeScreen() {
               <Ionicons name="arrow-forward-circle" size={22} color="#FFFFFF" />
             </View>
           </Pressable>
-        )}
+        ) : null}
 
         {/* Predictive Inventory Radar */}
         <View style={[styles.sectionHeader, { gap: 8 }]}>
@@ -163,9 +182,15 @@ export default function PulseHomeScreen() {
         <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border, paddingVertical: 6 }]}>
           {urgentItems.length === 0 ? (
             <View style={styles.emptyRow}>
-              <Ionicons name="checkmark-circle" size={20} color={palette.success} />
+              <Ionicons
+                name={products.length === 0 ? 'cube-outline' : 'checkmark-circle'}
+                size={20}
+                color={products.length === 0 ? palette.textMuted : palette.success}
+              />
               <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
-                All pantry items are well-stocked with low spoilage risk.
+                {products.length === 0
+                  ? 'No pantry items tracked yet. Add groceries in Scan to start forecasting.'
+                  : 'All pantry items are well-stocked with low spoilage risk.'}
               </Text>
             </View>
           ) : (
