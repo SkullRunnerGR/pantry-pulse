@@ -9,12 +9,23 @@ on:
 
 jobs:
   build-ios-unsigned:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Select Xcode 26 (Swift 6.2+)
+        run: |
+          XCODE_26=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -n "$XCODE_26" ]; then
+            sudo xcode-select -s "$XCODE_26/Contents/Developer"
+          fi
+          xcodebuild -version
+          swift --version
 
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
@@ -93,3 +104,16 @@ jobs:
           name: PantryPulse-v1.0.0-ios-unsigned-ipa
           path: dist/PantryPulse-v1.0.0-ios-unsigned.ipa
           retention-days: 30
+
+      - name: Publish Unsigned iOS IPA to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v1.0.0-ios-unsigned"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/PantryPulse-v1.0.0-ios-unsigned.ipa --clobber
+          else
+            gh release create "$TAG" dist/PantryPulse-v1.0.0-ios-unsigned.ipa \
+              --title "PantryPulse v1.0.0 (Unsigned iOS IPA)" \
+              --notes "Unsigned arm64 iOS release build of PantryPulse with offline Apple Vision OCR, barcode scanning, SQLite storage, and predictive ML forecasting. Install on iPhone with a free Apple ID via Sideloadly, AltStore, or SideStore."
+          fi
