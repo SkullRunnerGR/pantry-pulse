@@ -1,0 +1,95 @@
+name: Build Unsigned iOS IPA (Sideloadly / AltStore)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-ios-unsigned:
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Run TypeScript check and ML/OCR unit tests
+        run: |
+          npm run typecheck
+          npm run test
+
+      - name: Generate native iOS project (Expo Prebuild)
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Strip remote push entitlement for Free Apple ID compatibility
+        run: |
+          ENT="ios/PantryPulse/PantryPulse.entitlements"
+          if [ -f "$ENT" ]; then
+            /usr/libexec/PlistBuddy -c "Delete :aps-environment" "$ENT" 2>/dev/null || true
+            echo "Updated entitlements:"
+            cat "$ENT"
+          fi
+
+      - name: Install CocoaPods dependencies
+        working-directory: ios
+        run: pod install --repo-update
+
+      - name: Configure Xcode Node path and build Release iOS arm64 App (Unsigned)
+        run: |
+          set -o pipefail
+          echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
+          xcodebuild -version
+          xcodebuild \
+            -workspace ios/PantryPulse.xcworkspace \
+            -scheme PantryPulse \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ios/build \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package Unsigned .ipa for Sideloadly / AltStore / SideStore
+        run: |
+          APP_PATH="ios/build/Build/Products/Release-iphoneos/PantryPulse.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "ERROR: PantryPulse.app not found at $APP_PATH"
+            ls -la ios/build/Build/Products/Release-iphoneos/ || true
+            exit 1
+          fi
+
+          # Strip any partial signature directories so Sideloadly/AltStore signs cleanly
+          rm -rf "$APP_PATH/_CodeSignature" "$APP_PATH/embedded.mobileprovision"
+
+          mkdir -p dist/Payload
+          cp -R "$APP_PATH" dist/Payload/
+          cd dist
+          zip -qry PantryPulse-v1.0.0-ios-unsigned.ipa Payload
+          ls -lh PantryPulse-v1.0.0-ios-unsigned.ipa
+
+      - name: Upload Unsigned iOS IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PantryPulse-v1.0.0-ios-unsigned-ipa
+          path: dist/PantryPulse-v1.0.0-ios-unsigned.ipa
+          retention-days: 30
